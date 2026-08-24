@@ -54,6 +54,67 @@ describe('workflow AI employee files', () => {
     ]);
   });
 
+  it('uses the original attachment for NocoBase permanent file urls', async () => {
+    vi.mocked(axios.get).mockClear();
+    const attachment = {
+      id: 24,
+      filename: 'report.pdf',
+      extname: '.pdf',
+      storageId: 1,
+    };
+    const findOne = vi.fn(async () => ({
+      toJSON: () => attachment,
+    }));
+    const collection = {
+      name: 'attachments',
+      options: { template: 'file' },
+    };
+    const createFileRecord = vi.fn();
+    const plugin = {
+      app: {
+        name: 'main',
+        dataSourceManager: {
+          get: () => ({
+            collectionManager: {
+              getCollection: () => collection,
+              getRepository: () => ({ findOne }),
+            },
+          }),
+        },
+      },
+      db: {
+        getRepository: () => ({
+          findOne: async () => ({ options: { storage: 'local' } }),
+        }),
+      },
+      pm: {
+        get: () => ({ createFileRecord }),
+      },
+    } as unknown as Plugin;
+    const attachmentPart: { attachments?: unknown[] } = {};
+
+    await Files.resolvers(plugin, attachmentPart).resolveUrls([
+      {
+        type: 'file_url',
+        value: '/files/main/main/attachments/24.pdf',
+      },
+    ]);
+
+    expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ filter: { id: '24' } }));
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(createFileRecord).not.toHaveBeenCalled();
+    expect(attachmentPart.attachments).toEqual([
+      {
+        ...attachment,
+        source: {
+          dataSourceKey: 'main',
+          collectionName: 'attachments',
+          trustworthy: true,
+        },
+      },
+    ]);
+  });
+
   it('does not overwrite stored filenames when resolving file urls', async () => {
     vi.mocked(axios.get).mockResolvedValue({
       data: Buffer.from('image'),

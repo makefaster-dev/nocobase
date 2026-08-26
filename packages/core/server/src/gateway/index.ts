@@ -49,6 +49,10 @@ export { getHost, getHostname } from './utils';
 
 const compress = promisify(compression());
 
+// The SPA shell document gets a short freshness window: long enough that repeat visits within a session
+// skip one round trip, short enough that a new deployment is picked up within minutes.
+const HTML_CACHE_CONTROL = 'public, max-age=300';
+
 export interface IncomingRequest {
   url: string;
   headers: any;
@@ -546,6 +550,7 @@ export class Gateway extends EventEmitter {
           const v2Html = this.renderV2IndexHtml();
           if (v2Html) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Cache-Control', HTML_CACHE_CONTROL);
             res.end(v2Html);
             return;
           }
@@ -578,6 +583,11 @@ export class Gateway extends EventEmitter {
       req.url = req.url.substring(APP_PUBLIC_PATH.length - 1);
       if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
         return;
+      }
+      // Requests without a file extension resolve to the SPA shell document. A short freshness window
+      // lets repeat visits skip re-fetching the document while still picking up new deployments quickly.
+      if (!extname(parse(req.url).pathname || '') || req.url.endsWith('/index.html')) {
+        res.setHeader('Cache-Control', HTML_CACHE_CONTROL);
       }
       await compress(req, res);
       return handler(req, res, {

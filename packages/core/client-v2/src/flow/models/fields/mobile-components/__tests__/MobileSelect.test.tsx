@@ -69,16 +69,25 @@ function clickTrigger() {
   });
 }
 
-function openPopup() {
-  clickTrigger();
-  expect(screen.getByTestId('popup')).toBeInTheDocument();
+// The mobile UI module is loaded on demand, so flush the pending dynamic import (and the state update it
+// triggers) before interacting with the component.
+async function flushMobileModule() {
+  await act(async () => {});
 }
 
-function openLazyPopup() {
+async function openPopup() {
+  await flushMobileModule();
+  clickTrigger();
+  expect(await screen.findByTestId('popup')).toBeInTheDocument();
+}
+
+async function openLazyPopup() {
+  await flushMobileModule();
   act(() => {
     mockState.selectProps?.onClick?.();
   });
-  expect(screen.getByTestId('popup')).toBeInTheDocument();
+  expect(await screen.findByTestId('popup')).toBeInTheDocument();
+  await flushMobileModule();
 }
 
 function selectValues(values: string[]) {
@@ -228,10 +237,10 @@ describe('MobileSelect', () => {
     resetMockState();
   });
 
-  it('commits the selected value immediately in single mode', () => {
+  it('commits the selected value immediately in single mode', async () => {
     const { onChange, onChangeComplete } = renderMobileSelect();
 
-    openPopup();
+    await openPopup();
     selectValues(['a']);
 
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -240,9 +249,9 @@ describe('MobileSelect', () => {
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
   });
 
-  it('renders filtered options based on search text', () => {
+  it('renders filtered options based on search text', async () => {
     const { onChange, onChangeComplete } = renderMobileSelect();
-    openPopup();
+    await openPopup();
     act(() => {
       fireEvent.change(screen.getByTestId('search'), { target: { value: 'Option A' } });
     });
@@ -257,18 +266,18 @@ describe('MobileSelect', () => {
     expect(onChangeComplete).toHaveBeenCalledTimes(1);
   });
 
-  it('localizes the search input accessible name', () => {
+  it('localizes the search input accessible name', async () => {
     renderMobileSelect();
 
-    openPopup();
+    await openPopup();
 
     expect(screen.getByRole('searchbox', { name: 'Search' })).toBeInTheDocument();
   });
 
-  it('renders a translated cancel action after searching', () => {
+  it('renders a translated cancel action after searching', async () => {
     renderMobileSelect();
 
-    openPopup();
+    await openPopup();
     act(() => {
       fireEvent.change(screen.getByTestId('search'), { target: { value: 'Option' } });
     });
@@ -276,11 +285,11 @@ describe('MobileSelect', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
-  it('preserves the Chinese search input accessible name', () => {
+  it('preserves the Chinese search input accessible name', async () => {
     mockState.flowLocale = 'zh-CN';
     renderMobileSelect();
 
-    openPopup();
+    await openPopup();
     act(() => {
       fireEvent.change(screen.getByTestId('search'), { target: { value: 'Option' } });
     });
@@ -289,18 +298,18 @@ describe('MobileSelect', () => {
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
   });
 
-  it('does not reuse the simplified Chinese accessible name for traditional Chinese', () => {
+  it('does not reuse the simplified Chinese accessible name for traditional Chinese', async () => {
     mockState.flowLocale = 'zh-TW';
     renderMobileSelect();
 
-    openPopup();
+    await openPopup();
 
     expect(screen.getByRole('searchbox', { name: '搜尋' })).toBeInTheDocument();
   });
 
-  it('defers commit until confirm in multiple mode', () => {
+  it('defers commit until confirm in multiple mode', async () => {
     const { onChange, onChangeComplete } = renderMobileSelect({ value: [], mode: 'multiple' });
-    openPopup();
+    await openPopup();
 
     selectValues(['a', 'b']);
     expect(onChange).not.toHaveBeenCalled();
@@ -314,14 +323,15 @@ describe('MobileSelect', () => {
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
   });
 
-  it('does not open popup when disabled', () => {
+  it('does not open popup when disabled', async () => {
     renderMobileSelect({ disabled: true });
 
+    await flushMobileModule();
     clickTrigger();
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
   });
 
-  it('prefers displayValue for trigger rendering', () => {
+  it('prefers displayValue for trigger rendering', async () => {
     const displayValue = [{ label: 'Published', value: 'published' }];
     renderMobileSelect({ value: ['published'], displayValue, mode: 'multiple' });
 
@@ -356,24 +366,24 @@ describe('MobileSelect in SubForm/SubTable containers', () => {
     resetMockState();
   });
 
-  it('SubTable: single selection commits final value via onChangeComplete', () => {
+  it('SubTable: single selection commits final value via onChangeComplete', async () => {
     const onCommit = vi.fn();
 
     render(<SubTableCellHarness value={undefined} onCommit={onCommit} />);
 
-    openPopup();
+    await openPopup();
     selectValues(['b']);
 
     expect(onCommit).toHaveBeenCalledTimes(1);
     expect(onCommit).toHaveBeenCalledWith('b');
   });
 
-  it('SubTable: multiple mode only commits after confirm, and commit receives the full array', () => {
+  it('SubTable: multiple mode only commits after confirm, and commit receives the full array', async () => {
     const onCommit = vi.fn();
 
     render(<SubTableCellHarness value={[]} onCommit={onCommit} mode="multiple" />);
 
-    openPopup();
+    await openPopup();
     selectValues(['a', 'b']);
     confirmSelection();
 
@@ -388,10 +398,10 @@ describe('MobileLazySelect', () => {
     resetMockState();
   });
 
-  it('renders a translated cancel action after searching', () => {
+  it('renders a translated cancel action after searching', async () => {
     renderMobileLazySelect();
 
-    openLazyPopup();
+    await openLazyPopup();
     act(() => {
       fireEvent.change(screen.getByTestId('search'), { target: { value: '11' } });
     });
@@ -399,13 +409,13 @@ describe('MobileLazySelect', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
-  it('clears the selected relation record when it is tapped again in single mode', () => {
+  it('clears the selected relation record when it is tapped again in single mode', async () => {
     const { onChange } = renderMobileLazySelect({
       value: RELATION_OPTIONS[0],
       multiple: false,
     });
 
-    openLazyPopup();
+    await openLazyPopup();
     expect(mockState.checklistProps?.value).toEqual([RELATION_OPTIONS[0].uuid]);
 
     selectValues([]);
@@ -415,10 +425,10 @@ describe('MobileLazySelect', () => {
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
   });
 
-  it('keeps pending relation records selected until confirm', () => {
+  it('keeps pending relation records selected until confirm', async () => {
     const { onChange, rerender } = renderMobileLazySelect();
 
-    openLazyPopup();
+    await openLazyPopup();
     expect(mockState.checklistProps?.value).toEqual([]);
 
     selectValues(['c7d99828-a1de-9e70-4c2d-b0139abdf02e']);

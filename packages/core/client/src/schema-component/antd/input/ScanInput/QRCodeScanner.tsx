@@ -8,11 +8,10 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
 import ReactDOM from 'react-dom';
 import { LeftOutlined, FileImageOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useScanner } from './useScanner';
+import { loadHtml5Qrcode, useScanner } from './useScanner';
 export function ScanBox({ style = {} }: { style: React.CSSProperties }) {
   const commonStyle: React.CSSProperties = {
     position: 'absolute',
@@ -61,7 +60,8 @@ const QRCodeScannerInner = ({ visible, onClose, onScanSuccess, containerRef }) =
 
   useEffect(() => {
     if (!visible) return;
-    Html5Qrcode.getCameras()
+    loadHtml5Qrcode()
+      .then(({ Html5Qrcode }) => Html5Qrcode.getCameras())
       .then((cameras) => {
         if (cameras.length > 0) {
           setCameraAvailable(true);

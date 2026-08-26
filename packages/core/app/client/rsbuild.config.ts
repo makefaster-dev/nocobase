@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -144,16 +145,25 @@ export default defineConfig(({ command }) => {
       template: path.resolve(__dirname, 'index.html'),
       scriptLoading: isBuild ? 'module' : 'defer',
       tags: [
-        {
-          tag: 'link',
-          attrs: {
-            rel: 'stylesheet',
-            href: `${htmlPublicPath}global.css`,
-          },
-          publicPath: false,
-          head: true,
-          append: false,
-        },
+        // In production the shared global stylesheet is inlined into the document so first paint does
+        // not wait on an extra render-blocking request; in dev it stays a link for live reloads.
+        isBuild
+          ? {
+              tag: 'style',
+              children: fs.readFileSync(path.resolve(__dirname, 'public', 'global.css'), 'utf-8'),
+              head: true,
+              append: false,
+            }
+          : {
+              tag: 'link',
+              attrs: {
+                rel: 'stylesheet',
+                href: `${htmlPublicPath}global.css`,
+              },
+              publicPath: false,
+              head: true,
+              append: false,
+            },
         {
           tag: 'script',
           children: createRuntimeHeadScript(appPublicPath, isBuild),
@@ -164,6 +174,10 @@ export default defineConfig(({ command }) => {
           tag: 'script',
           attrs: {
             src: `${htmlPublicPath}browser-checker.js?v=1`,
+            // Deferred so it stops render-blocking first paint. It still executes before the module
+            // entry scripts (deferred scripts run in tree order), so its redirect and UA-class logic
+            // keeps running ahead of the application.
+            defer: true,
           },
           publicPath: false,
           head: true,
@@ -175,6 +189,9 @@ export default defineConfig(({ command }) => {
       target: 'web',
       overrideBrowserslist: ['chrome >= 87', 'edge >= 88', 'firefox >= 78', 'safari >= 14'],
       polyfill: 'usage',
+      // The initial stylesheets are small; inlining them removes several render-blocking requests in
+      // front of first paint.
+      inlineStyles: isBuild,
       distPath: {
         root: path.resolve(__dirname, '../dist/client'),
         js: 'assets',
@@ -274,8 +291,18 @@ export default defineConfig(({ command }) => {
       progressBar: true,
     },
     tools: {
-      rspack(config) {
+      rspack(config, { rspack }) {
         config.target = ['web', 'es2020'];
+        // moment is only bundled for a legacy filter-parsing compatibility path that does no
+        // locale-aware formatting, so its ~230KB of locale files are dead weight on the boot path.
+        // Consumers that need a moment locale must import it explicitly.
+        config.plugins = config.plugins || [];
+        config.plugins.push(
+          new rspack.IgnorePlugin({
+            resourceRegExp: /^\.\/locale$/,
+            contextRegExp: /[\\/]moment$/,
+          }),
+        );
         config.optimization = {
           ...config.optimization,
           runtimeChunk: 'single',
@@ -349,7 +376,11 @@ export default defineConfig(({ command }) => {
                 minSize: 0,
               },
               markdownEcosystem: {
-                test: /[\\/]node_modules[\\/](?:vditor|mermaid|markdown-it|markdown-it-highlightjs|highlight\.js|linkify-it|mdurl|uc\.micro|dompurify)[\\/]/,
+                // dompurify is deliberately NOT part of this group: it is imported statically by
+                // boot-critical code (flow-engine sanitizers), and a fixed-name cache group merges every
+                // matching module into one chunk — a single boot-critical member would drag the whole
+                // markdown ecosystem (vditor, mermaid, highlight.js) back onto the entry.
+                test: /[\\/]node_modules[\\/](?:vditor|mermaid|markdown-it|markdown-it-highlightjs|highlight\.js|linkify-it|mdurl|uc\.micro)[\\/]/,
                 name: 'vendor-markdown',
                 chunks: 'all',
                 priority: 53,
@@ -364,9 +395,21 @@ export default defineConfig(({ command }) => {
                 enforce: true,
                 minSize: 0,
               },
+              // codemirror is kept in its own group: it is still statically reachable from the code
+              // editor, and a fixed-name cache group merges every matching module into one chunk — so
+              // grouping it with the lazily loaded editors (quill, slate) would drag them all back onto
+              // the entry.
               editorEcosystem: {
-                test: /[\\/]node_modules[\\/](?:slate|slate-react|slate-history|quill|react-quill|quill-image-resize-module-react|codemirror|@codemirror[\\/]|@lezer[\\/])/,
+                test: /[\\/]node_modules[\\/](?:slate|slate-react|slate-history|quill|react-quill|quill-image-resize-module-react)[\\/]/,
                 name: 'vendor-editor',
+                chunks: 'all',
+                priority: 51,
+                enforce: true,
+                minSize: 0,
+              },
+              codemirrorEcosystem: {
+                test: /[\\/]node_modules[\\/](?:codemirror|@codemirror[\\/]|@lezer[\\/])/,
+                name: 'vendor-codemirror',
                 chunks: 'all',
                 priority: 51,
                 enforce: true,
@@ -389,7 +432,11 @@ export default defineConfig(({ command }) => {
                 minSize: 0,
               },
               elk: {
-                test: /[\\/]node_modules[\\/](?:elkjs|dagre-d3-es|graphlib|cytoscape|cytoscape-cose-bilkent|html5-qrcode)[\\/]/,
+                // graphlib is deliberately NOT part of this group: it is imported statically by
+                // boot-critical code (@nocobase/utils CollectionsGraph), and a fixed-name cache group
+                // merges every matching module into one chunk — a single boot-critical member would drag
+                // the whole diagram ecosystem (elkjs, cytoscape, dagre) back onto the entry.
+                test: /[\\/]node_modules[\\/](?:elkjs|dagre-d3-es|cytoscape|cytoscape-cose-bilkent|html5-qrcode)[\\/]/,
                 name: 'vendor-diagram',
                 chunks: 'all',
                 priority: 48,

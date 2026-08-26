@@ -16,7 +16,8 @@ export const parseMarkdown = _.memoize(async (text: string) => {
     return text;
   }
   const m = await import('./md');
-  return stripMarkdownIframes(m.default.render(text));
+  const md = await m.getMd();
+  return stripMarkdownIframes(md.render(text));
 });
 
 export function useParseMarkdown(text: string) {

@@ -62,7 +62,7 @@ describe('MobileDatePicker', () => {
     mockState.mobileDatePickerProps = undefined;
   });
 
-  it('uses the form value as the mobile popup value', () => {
+  it('uses the form value as the mobile popup value', async () => {
     render(
       <MobileDatePicker
         value={dayjs('2037-03-06 12:34:56')}
@@ -78,8 +78,9 @@ describe('MobileDatePicker', () => {
       fireEvent.click(trigger);
     });
 
+    // The mobile UI module is loaded on demand, so the popup mounts once the dynamic import resolves.
+    expect(await screen.findByTestId('mobile-date-picker')).toBeInTheDocument();
     const popupValue = mockState.mobileDatePickerProps?.value;
-    expect(screen.getByTestId('mobile-date-picker')).toBeInTheDocument();
     expect(popupValue).toBeInstanceOf(Date);
     if (!(popupValue instanceof Date)) {
       throw new Error('Expected popup value to be a Date');

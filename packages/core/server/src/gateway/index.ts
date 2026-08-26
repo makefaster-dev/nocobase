@@ -30,6 +30,7 @@ import { getPackageDirByExposeUrl, getPackageNameByExposeUrl } from '../plugin-m
 import { applyErrorWithArgs, getErrorWithCode } from './errors';
 import { IPCSocketClient } from './ipc-socket-client';
 import { IPCSocketServer } from './ipc-socket-server';
+import { servePrecompressedAsset } from './precompressed';
 import { getStorageUploadSecurityHeaders } from './static-file-security';
 import {
   injectRuntimeScript,
@@ -47,6 +48,28 @@ import { Duplex } from 'node:stream';
 export { getHost, getHostname } from './utils';
 
 const compress = promisify(compression());
+
+// The SPA shell document gets a short freshness window: long enough that repeat visits within a session
+// skip one round trip, short enough that a new deployment is picked up within minutes.
+const HTML_CACHE_CONTROL = 'public, max-age=300';
+
+// Hash-addressed assets never change under the same URL (content-hashed filenames, or explicit ?hash=
+// cache busting), so browsers may cache them for a year without revalidating.
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+function isHashAddressedAssetUrl(url: string) {
+  const { pathname, query } = parse(url);
+  if (!pathname) {
+    return false;
+  }
+  // Bundler output with a content hash in the file name, e.g. /assets/index-359e34df.js or
+  // 119.e7dbd037d52d1286.js from plugin client dists.
+  if (/[-.][0-9a-f]{8,32}\.(js|mjs|css|svg|png|jpg|jpeg|gif|webp|woff2?|ttf|ico|map)$/i.test(pathname)) {
+    return true;
+  }
+  // Plugin entry bundles are addressed with an explicit ?hash=... query that changes on rebuild.
+  return Boolean(query && /(^|&)hash=[^&]+/.test(query));
+}
 
 export interface IncomingRequest {
   url: string;
@@ -510,12 +533,18 @@ export class Gateway extends EventEmitter {
           return;
         }
       }
-      await compress(req, res);
       const packageName = getPackageNameByExposeUrl(pathname);
       // /static/plugins/@nocobase/plugins-acl/README.md => /User/projects/nocobase/plugins/acl
       const publicDir = getPackageDirByExposeUrl(pathname);
       // /static/plugins/@nocobase/plugins-acl/README.md => README.md
       const destination = pathname.replace(PLUGIN_STATICS_PATH, '').replace(packageName, '');
+      if (isHashAddressedAssetUrl(req.url)) {
+        res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+      }
+      if (servePrecompressedAsset(req, res, publicDir, destination)) {
+        return;
+      }
+      await compress(req, res);
       return handler(req, res, {
         public: publicDir,
         rewrites: [
@@ -542,6 +571,7 @@ export class Gateway extends EventEmitter {
           const v2Html = this.renderV2IndexHtml();
           if (v2Html) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Cache-Control', HTML_CACHE_CONTROL);
             res.end(v2Html);
             return;
           }
@@ -556,6 +586,12 @@ export class Gateway extends EventEmitter {
         if (modernPrefix !== MODERN_CLIENT_DIST_DIR && req.url.startsWith(`/${modernPrefix}/`)) {
           req.url = `/${MODERN_CLIENT_DIST_DIR}/${req.url.slice(modernPrefix.length + 2)}`;
         }
+        if (isHashAddressedAssetUrl(req.url)) {
+          res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+        }
+        if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
+          return;
+        }
         await compress(req, res);
         return handler(req, res, {
           public: `${process.env.APP_PACKAGE_ROOT}/dist/client`,
@@ -569,6 +605,17 @@ export class Gateway extends EventEmitter {
         }
       }
       req.url = req.url.substring(APP_PUBLIC_PATH.length - 1);
+      if (isHashAddressedAssetUrl(req.url)) {
+        res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+      } else {
+        // Everything else under the shell dist — the SPA document (extensionless routes) and the few
+        // unhashed root assets (global stylesheet, checker script, favicon) — gets a short freshness
+        // window: repeat visits skip revalidation round trips while new deployments propagate quickly.
+        res.setHeader('Cache-Control', HTML_CACHE_CONTROL);
+      }
+      if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
+        return;
+      }
       await compress(req, res);
       return handler(req, res, {
         public: `${process.env.APP_PACKAGE_ROOT}/dist/client`,

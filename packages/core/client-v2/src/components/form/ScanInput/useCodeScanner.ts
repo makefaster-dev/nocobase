@@ -7,10 +7,15 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import type { Html5Qrcode } from 'html5-qrcode';
 import jsQR from 'jsqr';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CodeFormatsToSupport } from './types';
+
+// html5-qrcode is a heavy bundle that is only needed once a scanner actually opens, so it is imported
+// on demand instead of being part of the boot-critical chunk group.
+let html5QrcodePromise: Promise<typeof import('html5-qrcode')> | undefined;
+export const loadHtml5Qrcode = () => (html5QrcodePromise ??= import('html5-qrcode'));
 
 type ScannerSize = {
   width: number;
@@ -59,20 +64,24 @@ const QR_SCAN_IMAGE_TRANSFORMS: JsQRImageTransform[] = [
   { contrast: 4, threshold: 105 },
 ];
 
-export const DEFAULT_CODE_FORMATS: CodeFormatsToSupport = [
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODE_93,
-  Html5QrcodeSupportedFormats.CODABAR,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.ITF,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.DATA_MATRIX,
-  Html5QrcodeSupportedFormats.PDF_417,
-];
+export function getDefaultCodeFormats(
+  formats: typeof import('html5-qrcode').Html5QrcodeSupportedFormats,
+): CodeFormatsToSupport {
+  return [
+    formats.QR_CODE,
+    formats.CODE_128,
+    formats.CODE_39,
+    formats.CODE_93,
+    formats.CODABAR,
+    formats.EAN_13,
+    formats.EAN_8,
+    formats.ITF,
+    formats.UPC_A,
+    formats.UPC_E,
+    formats.DATA_MATRIX,
+    formats.PDF_417,
+  ];
+}
 
 export function getCodeScanBoxSize(width: number, height: number) {
   return {
@@ -157,6 +166,7 @@ async function stopScanner(scanner?: Html5Qrcode, options: { clear?: boolean } =
     return;
   }
 
+  const { Html5QrcodeScannerState } = await loadHtml5Qrcode();
   const state = scanner.getState();
   if ([Html5QrcodeScannerState.SCANNING, Html5QrcodeScannerState.PAUSED].includes(state)) {
     await scanner.stop();
@@ -271,7 +281,8 @@ function getTransformedImageData(imageData: ImageData, transform: JsQRImageTrans
 }
 
 async function scanFileWithJsQR(file: File, formatsToSupport?: CodeFormatsToSupport) {
-  const formats = formatsToSupport?.length ? formatsToSupport : DEFAULT_CODE_FORMATS;
+  const { Html5QrcodeSupportedFormats } = await loadHtml5Qrcode();
+  const formats = formatsToSupport?.length ? formatsToSupport : getDefaultCodeFormats(Html5QrcodeSupportedFormats);
   if (!formats.includes(Html5QrcodeSupportedFormats.QR_CODE)) {
     throw new Error('QR_CODE is not included in the requested formats');
   }
@@ -294,8 +305,9 @@ async function scanFileWithJsQR(file: File, formatsToSupport?: CodeFormatsToSupp
   throw new Error('No QR code decoded by jsQR');
 }
 
-function shouldScanQrWithJsQR(formatsToSupport?: CodeFormatsToSupport) {
-  const formats = formatsToSupport?.length ? formatsToSupport : DEFAULT_CODE_FORMATS;
+async function shouldScanQrWithJsQR(formatsToSupport?: CodeFormatsToSupport) {
+  const { Html5QrcodeSupportedFormats } = await loadHtml5Qrcode();
+  const formats = formatsToSupport?.length ? formatsToSupport : getDefaultCodeFormats(Html5QrcodeSupportedFormats);
   return formats.includes(Html5QrcodeSupportedFormats.QR_CODE);
 }
 
@@ -376,7 +388,7 @@ export function useCodeScanner({
         }
         return;
       }
-      if (shouldScanQrWithJsQR(formatsToSupport)) {
+      if (await shouldScanQrWithJsQR(formatsToSupport)) {
         liveQrScanStopRef.current = startLiveQrScan(elementId, reportScanSuccess);
       }
       await enableContinuousFocus(scannerInstance);
@@ -388,7 +400,7 @@ export function useCodeScanner({
     async (file: File) => {
       cancelActiveScan();
       scanSucceededRef.current = false;
-      if (isSafariBrowser() && shouldScanQrWithJsQR(formatsToSupport)) {
+      if (isSafariBrowser() && (await shouldScanQrWithJsQR(formatsToSupport))) {
         try {
           const decodedText = await scanFileWithJsQR(file, formatsToSupport);
           reportScanSuccess(decodedText);
@@ -419,22 +431,38 @@ export function useCodeScanner({
       return;
     }
 
-    const scannerInstance = new Html5Qrcode(elementId, {
-      formatsToSupport: formatsToSupport?.length ? formatsToSupport : DEFAULT_CODE_FORMATS,
-      verbose: false,
-    });
-    setScanner(scannerInstance);
-    startScanCamera(scannerInstance).catch((error: unknown) => {
-      if (onCameraStartFailure) {
-        onCameraStartFailure(error);
+    let disposed = false;
+    let scannerInstance: Html5Qrcode | undefined;
+    const setupScanner = async () => {
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await loadHtml5Qrcode();
+      if (disposed) {
         return;
       }
-      onScanFailure?.();
-    });
+      scannerInstance = new Html5Qrcode(elementId, {
+        formatsToSupport: formatsToSupport?.length
+          ? formatsToSupport
+          : getDefaultCodeFormats(Html5QrcodeSupportedFormats),
+        verbose: false,
+      });
+      setScanner(scannerInstance);
+      try {
+        await startScanCamera(scannerInstance);
+      } catch (error) {
+        if (onCameraStartFailure) {
+          onCameraStartFailure(error);
+          return;
+        }
+        onScanFailure?.();
+      }
+    };
+    setupScanner().catch(() => undefined);
 
     return () => {
+      disposed = true;
       cancelActiveScan();
-      stopScanner(scannerInstance, { clear: true }).catch(() => undefined);
+      if (scannerInstance) {
+        stopScanner(scannerInstance, { clear: true }).catch(() => undefined);
+      }
     };
   }, [cancelActiveScan, elementId, enabled, formatsToSupport, onCameraStartFailure, onScanFailure, startScanCamera]);
 

@@ -11,8 +11,8 @@ import { useFlowModelContext } from '@nocobase/flow-engine';
 import { Select } from 'antd';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, CheckList, Popup, SearchBar, SpinLoading } from 'antd-mobile';
 import { css } from '@emotion/css';
+import { Button, CheckList, Popup, SearchBar, SpinLoading } from './antdMobileLazy';
 import {
   LabelByField,
   resolveOptions,

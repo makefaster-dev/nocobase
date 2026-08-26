@@ -29,6 +29,7 @@ import {
   getSourcePackages,
 } from './utils/buildPluginUtils';
 import { getDepPkgPath, getDepsConfig } from './utils/getDepsConfig';
+import { precompressDirectory } from './precompress';
 import { obfuscate } from './utils/obfuscationResult';
 import { AutoInjectPublicPathPlugin } from './injectPublicPathPlugin';
 
@@ -829,5 +830,7 @@ export async function buildPlugin(cwd: string, userConfig: UserConfig, sourcemap
     await buildPluginClient(cwd, userConfig, sourcemap, log, 'client-v2');
     await buildPluginServer(cwd, userConfig, sourcemap, log);
   }
+  await precompressDirectory(path.join(cwd, target_dir, 'client'));
+  await precompressDirectory(path.join(cwd, target_dir, 'client-v2'));
   writeExternalPackageVersion(cwd, log);
 }

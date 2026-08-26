@@ -10,7 +10,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React, { useCallback } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CODE_FORMATS, getCodeScanBoxSize, scanQrVideoFrame, useCodeScanner } from '../useCodeScanner';
+import { getCodeScanBoxSize, getDefaultCodeFormats, scanQrVideoFrame, useCodeScanner } from '../useCodeScanner';
 
 type MockScannerInstance = {
   applyVideoConstraints: ReturnType<typeof vi.fn>;
@@ -58,27 +58,33 @@ const jsQrMocks = vi.hoisted(() => {
   };
 });
 
+const mockSupportedFormats = vi.hoisted(() => ({
+  CODABAR: 2,
+  CODE_128: 5,
+  CODE_39: 3,
+  CODE_93: 4,
+  DATA_MATRIX: 6,
+  EAN_13: 9,
+  EAN_8: 10,
+  ITF: 8,
+  PDF_417: 11,
+  QR_CODE: 0,
+  UPC_A: 14,
+  UPC_E: 15,
+}));
+
 vi.mock('html5-qrcode', () => ({
   Html5Qrcode: mocks.Html5Qrcode,
   Html5QrcodeScannerState: {
     PAUSED: 3,
     SCANNING: 2,
   },
-  Html5QrcodeSupportedFormats: {
-    CODABAR: 2,
-    CODE_128: 5,
-    CODE_39: 3,
-    CODE_93: 4,
-    DATA_MATRIX: 6,
-    EAN_13: 9,
-    EAN_8: 10,
-    ITF: 8,
-    PDF_417: 11,
-    QR_CODE: 0,
-    UPC_A: 14,
-    UPC_E: 15,
-  },
+  Html5QrcodeSupportedFormats: mockSupportedFormats,
 }));
+
+const DEFAULT_CODE_FORMATS = getDefaultCodeFormats(
+  mockSupportedFormats as unknown as typeof import('html5-qrcode').Html5QrcodeSupportedFormats,
+);
 
 vi.mock('jsqr', () => jsQrMocks);
 

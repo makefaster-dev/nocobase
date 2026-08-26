@@ -53,6 +53,24 @@ const compress = promisify(compression());
 // skip one round trip, short enough that a new deployment is picked up within minutes.
 const HTML_CACHE_CONTROL = 'public, max-age=300';
 
+// Hash-addressed assets never change under the same URL (content-hashed filenames, or explicit ?hash=
+// cache busting), so browsers may cache them for a year without revalidating.
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+function isHashAddressedAssetUrl(url: string) {
+  const { pathname, query } = parse(url);
+  if (!pathname) {
+    return false;
+  }
+  // Bundler output with a content hash in the file name, e.g. /assets/index-359e34df.js or
+  // 119.e7dbd037d52d1286.js from plugin client dists.
+  if (/[-.][0-9a-f]{8,32}\.(js|mjs|css|svg|png|jpg|jpeg|gif|webp|woff2?|ttf|ico|map)$/i.test(pathname)) {
+    return true;
+  }
+  // Plugin entry bundles are addressed with an explicit ?hash=... query that changes on rebuild.
+  return Boolean(query && /(^|&)hash=[^&]+/.test(query));
+}
+
 export interface IncomingRequest {
   url: string;
   headers: any;
@@ -520,6 +538,9 @@ export class Gateway extends EventEmitter {
       const publicDir = getPackageDirByExposeUrl(pathname);
       // /static/plugins/@nocobase/plugins-acl/README.md => README.md
       const destination = pathname.replace(PLUGIN_STATICS_PATH, '').replace(packageName, '');
+      if (isHashAddressedAssetUrl(req.url)) {
+        res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+      }
       if (servePrecompressedAsset(req, res, publicDir, destination)) {
         return;
       }
@@ -565,6 +586,9 @@ export class Gateway extends EventEmitter {
         if (modernPrefix !== MODERN_CLIENT_DIST_DIR && req.url.startsWith(`/${modernPrefix}/`)) {
           req.url = `/${MODERN_CLIENT_DIST_DIR}/${req.url.slice(modernPrefix.length + 2)}`;
         }
+        if (isHashAddressedAssetUrl(req.url)) {
+          res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+        }
         if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
           return;
         }
@@ -581,6 +605,9 @@ export class Gateway extends EventEmitter {
         }
       }
       req.url = req.url.substring(APP_PUBLIC_PATH.length - 1);
+      if (isHashAddressedAssetUrl(req.url)) {
+        res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+      }
       if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
         return;
       }

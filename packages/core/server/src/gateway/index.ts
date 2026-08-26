@@ -607,14 +607,14 @@ export class Gateway extends EventEmitter {
       req.url = req.url.substring(APP_PUBLIC_PATH.length - 1);
       if (isHashAddressedAssetUrl(req.url)) {
         res.setHeader('Cache-Control', IMMUTABLE_CACHE_CONTROL);
+      } else {
+        // Everything else under the shell dist — the SPA document (extensionless routes) and the few
+        // unhashed root assets (global stylesheet, checker script, favicon) — gets a short freshness
+        // window: repeat visits skip revalidation round trips while new deployments propagate quickly.
+        res.setHeader('Cache-Control', HTML_CACHE_CONTROL);
       }
       if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
         return;
-      }
-      // Requests without a file extension resolve to the SPA shell document. A short freshness window
-      // lets repeat visits skip re-fetching the document while still picking up new deployments quickly.
-      if (!extname(parse(req.url).pathname || '') || req.url.endsWith('/index.html')) {
-        res.setHeader('Cache-Control', HTML_CACHE_CONTROL);
       }
       await compress(req, res);
       return handler(req, res, {

@@ -7,48 +7,11 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import {
-  Area,
-  Bar,
-  BidirectionalBar,
-  Box,
-  Bullet,
-  Chord,
-  CirclePacking,
-  Column,
-  DualAxes,
-  Facet,
-  Funnel,
-  Gauge,
-  Heatmap,
-  Histogram,
-  Line,
-  Liquid,
-  Mix,
-  Pie,
-  Progress,
-  Radar,
-  RadialBar,
-  RingProgress,
-  Rose,
-  Sankey,
-  Scatter,
-  Stock,
-  Sunburst,
-  TinyArea,
-  TinyColumn,
-  TinyLine,
-  Treemap,
-  Venn,
-  Violin,
-  Waterfall,
-  WordCloud,
-} from '@antv/g2plot';
 import { Field } from '@formily/core';
 import { observer, useField } from '@formily/react';
 import { Spin } from 'antd';
 import cls from 'classnames';
-import React, { forwardRef, useEffect, useRef } from 'react';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAPIClient } from '../../../api-client';
 import { G2PlotDesigner } from './G2PlotDesigner';
@@ -59,43 +22,69 @@ export type ReactG2PlotProps<O> = {
   readonly config: O;
 };
 
-const plots = {
-  Line,
-  Area,
-  Column,
-  Bar,
-  Pie,
-  Rose,
-  WordCloud,
-  Scatter,
-  Radar,
-  DualAxes,
-  TinyLine,
-  TinyColumn,
-  TinyArea,
-  Histogram,
-  Progress,
-  RingProgress,
-  Heatmap,
-  Box,
-  Violin,
-  Venn,
-  Stock,
-  Funnel,
-  Liquid,
-  Bullet,
-  Sunburst,
-  Gauge,
-  Waterfall,
-  RadialBar,
-  BidirectionalBar,
-  Treemap,
-  Sankey,
-  Chord,
-  CirclePacking,
-  Mix,
-  Facet,
-};
+const PLOT_NAMES = [
+  'Line',
+  'Area',
+  'Column',
+  'Bar',
+  'Pie',
+  'Rose',
+  'WordCloud',
+  'Scatter',
+  'Radar',
+  'DualAxes',
+  'TinyLine',
+  'TinyColumn',
+  'TinyArea',
+  'Histogram',
+  'Progress',
+  'RingProgress',
+  'Heatmap',
+  'Box',
+  'Violin',
+  'Venn',
+  'Stock',
+  'Funnel',
+  'Liquid',
+  'Bullet',
+  'Sunburst',
+  'Gauge',
+  'Waterfall',
+  'RadialBar',
+  'BidirectionalBar',
+  'Treemap',
+  'Sankey',
+  'Chord',
+  'CirclePacking',
+  'Mix',
+  'Facet',
+] as const;
+
+// The charting library is heavy and only needed when a chart block actually renders, so it is imported
+// on demand instead of being part of the boot-critical chunk group. `plots` is populated once the module
+// loads; it starts empty so this module stays synchronous for its public API.
+const plots: Record<string, unknown> = {};
+
+let g2plotPromise: Promise<Record<string, unknown>> | undefined;
+
+function loadPlots(): Promise<Record<string, unknown>> {
+  return (g2plotPromise ??= import('@antv/g2plot').then((mod: Record<string, unknown>) => {
+    for (const name of PLOT_NAMES) {
+      plots[name] = mod[name];
+    }
+    return plots;
+  }));
+}
+
+function usePlots() {
+  const [loadedPlots, setLoadedPlots] = useState<Record<string, unknown> | undefined>();
+  useEffect(() => {
+    loadPlots()
+      .then((value) => setLoadedPlots(() => value))
+      .catch(console.error);
+  }, []);
+  return loadedPlots;
+}
 
 export const G2PlotRenderer = forwardRef(function <O = any>(props: ReactG2PlotProps<O>, ref: any) {
   const { className, plot, config } = props;
@@ -143,6 +132,7 @@ export const G2Plot: any = observer(
     const field = useField<Field>();
     const { t } = useTranslation();
     const api = useAPIClient();
+    const loadedPlots = usePlots();
     useEffect(() => {
       field.data = field.data || {};
       field.data.loading = true;
@@ -169,14 +159,14 @@ export const G2Plot: any = observer(
     if (!plot || !config) {
       return <div style={{ opacity: 0.3 }}>{t('In configuration')}...</div>;
     }
-    if (field?.data?.loading !== false) {
+    if (field?.data?.loading !== false || !loadedPlots) {
       return <Spin />;
     }
     return (
       <div>
         {field.title && <h2>{field.title}</h2>}
         <G2PlotRenderer
-          plot={plots[plot]}
+          plot={loadedPlots[plot]}
           config={{
             ...config,
             data: Array.isArray(config?.data) ? config.data : [],

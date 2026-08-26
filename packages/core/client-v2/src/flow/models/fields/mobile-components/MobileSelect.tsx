@@ -9,8 +9,9 @@
 
 import { useFlowModelContext } from '@nocobase/flow-engine';
 import { Select } from 'antd';
-import { Button, CheckList, ConfigProvider, Popup, SearchBar, useConfig } from 'antd-mobile';
+import type * as AntdMobileNS from 'antd-mobile';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useAntdMobile } from './antdMobileLazy';
 
 const mobileSelectSafeAreaPaddingBottom = 'calc(12px + env(safe-area-inset-bottom, 0px))';
 
@@ -31,7 +32,28 @@ function normalizeMobileLocale(locale?: string) {
 }
 
 export function MobileSelect(props) {
+  const antdMobile = useAntdMobile();
+  if (!antdMobile) {
+    // The heavy mobile UI bundle is still loading; render the read-only trigger so the field is visible
+    // immediately. The popup only matters after a tap, by which time the module has loaded.
+    return (
+      <Select
+        {...props}
+        value={props.displayValue ?? props.value}
+        open={false}
+        dropdownStyle={{ display: 'none' }}
+        showSearch={false}
+        style={{ pointerEvents: 'none', width: '100%' }}
+      />
+    );
+  }
+  return <MobileSelectInner antdMobile={antdMobile} {...props} />;
+}
+
+function MobileSelectInner(allProps: { antdMobile: typeof AntdMobileNS } & Record<string, any>) {
+  const { antdMobile, ...props } = allProps;
   const { value, displayValue, onChange, onChangeComplete, disabled, options = [], mode } = props;
+  const { Button, CheckList, ConfigProvider, Popup, SearchBar, useConfig } = antdMobile;
   const isMultiple = ['multiple', 'tags'].includes(mode);
   const ctx = useFlowModelContext();
   const t = ctx.t;

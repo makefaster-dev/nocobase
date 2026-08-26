@@ -8,8 +8,8 @@
  */
 
 import { TimePicker } from 'antd';
-import { Picker } from 'antd-mobile';
 import React, { useState } from 'react';
+import { Picker } from './antdMobileLazy';
 
 export const MobileTimePicker = (props) => {
   const [visible, setVisible] = useState(false);

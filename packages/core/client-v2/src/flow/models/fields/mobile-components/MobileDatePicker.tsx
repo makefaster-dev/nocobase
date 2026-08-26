@@ -11,8 +11,8 @@ import { useFlowModelContext } from '@nocobase/flow-engine';
 import { dayjs } from '@nocobase/utils/client';
 import type { Dayjs } from 'dayjs';
 import { DatePicker } from 'antd';
-import { DatePicker as AntdMobileDatePicker } from 'antd-mobile';
 import React from 'react';
+import { DatePicker as AntdMobileDatePicker } from './antdMobileLazy';
 import { useCallback, useState } from 'react';
 
 type DateValue = string | number | Date | Dayjs | null | undefined;

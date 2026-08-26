@@ -395,9 +395,21 @@ export default defineConfig(({ command }) => {
                 enforce: true,
                 minSize: 0,
               },
+              // codemirror is kept in its own group: it is still statically reachable from the code
+              // editor, and a fixed-name cache group merges every matching module into one chunk — so
+              // grouping it with the lazily loaded editors (quill, slate) would drag them all back onto
+              // the entry.
               editorEcosystem: {
-                test: /[\\/]node_modules[\\/](?:slate|slate-react|slate-history|quill|react-quill|quill-image-resize-module-react|codemirror|@codemirror[\\/]|@lezer[\\/])/,
+                test: /[\\/]node_modules[\\/](?:slate|slate-react|slate-history|quill|react-quill|quill-image-resize-module-react)[\\/]/,
                 name: 'vendor-editor',
+                chunks: 'all',
+                priority: 51,
+                enforce: true,
+                minSize: 0,
+              },
+              codemirrorEcosystem: {
+                test: /[\\/]node_modules[\\/](?:codemirror|@codemirror[\\/]|@lezer[\\/])/,
+                name: 'vendor-codemirror',
                 chunks: 'all',
                 priority: 51,
                 enforce: true,

@@ -9,7 +9,7 @@
 
 import React, { useState } from 'react';
 import { Popover } from 'antd';
-import { RenderElementProps } from 'slate-react';
+import type { RenderElementProps } from 'slate-react';
 import { FlowContextSelector } from '../FlowContextSelector';
 import type { VariableTriggerElement } from './types';
 import type { MetaTreeNode } from '../../flowContext';

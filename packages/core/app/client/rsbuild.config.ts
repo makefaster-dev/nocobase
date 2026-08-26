@@ -174,6 +174,10 @@ export default defineConfig(({ command }) => {
           tag: 'script',
           attrs: {
             src: `${htmlPublicPath}browser-checker.js?v=1`,
+            // Deferred so it stops render-blocking first paint. It still executes before the module
+            // entry scripts (deferred scripts run in tree order), so its redirect and UA-class logic
+            // keeps running ahead of the application.
+            defer: true,
           },
           publicPath: false,
           head: true,

@@ -349,7 +349,11 @@ export default defineConfig(({ command }) => {
                 minSize: 0,
               },
               markdownEcosystem: {
-                test: /[\\/]node_modules[\\/](?:vditor|mermaid|markdown-it|markdown-it-highlightjs|highlight\.js|linkify-it|mdurl|uc\.micro|dompurify)[\\/]/,
+                // dompurify is deliberately NOT part of this group: it is imported statically by
+                // boot-critical code (flow-engine sanitizers), and a fixed-name cache group merges every
+                // matching module into one chunk — a single boot-critical member would drag the whole
+                // markdown ecosystem (vditor, mermaid, highlight.js) back onto the entry.
+                test: /[\\/]node_modules[\\/](?:vditor|mermaid|markdown-it|markdown-it-highlightjs|highlight\.js|linkify-it|mdurl|uc\.micro)[\\/]/,
                 name: 'vendor-markdown',
                 chunks: 'all',
                 priority: 53,
@@ -389,7 +393,11 @@ export default defineConfig(({ command }) => {
                 minSize: 0,
               },
               elk: {
-                test: /[\\/]node_modules[\\/](?:elkjs|dagre-d3-es|graphlib|cytoscape|cytoscape-cose-bilkent|html5-qrcode)[\\/]/,
+                // graphlib is deliberately NOT part of this group: it is imported statically by
+                // boot-critical code (@nocobase/utils CollectionsGraph), and a fixed-name cache group
+                // merges every matching module into one chunk — a single boot-critical member would drag
+                // the whole diagram ecosystem (elkjs, cytoscape, dagre) back onto the entry.
+                test: /[\\/]node_modules[\\/](?:elkjs|dagre-d3-es|cytoscape|cytoscape-cose-bilkent|html5-qrcode)[\\/]/,
                 name: 'vendor-diagram',
                 chunks: 'all',
                 priority: 48,

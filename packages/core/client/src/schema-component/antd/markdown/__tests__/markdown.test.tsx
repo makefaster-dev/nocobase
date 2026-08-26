@@ -16,9 +16,9 @@ import { parseMarkdown } from '../util';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../md', () => ({
-  default: {
+  getMd: async () => ({
     render: (text: string) => `<p>${text}</p>`,
-  },
+  }),
 }));
 
 describe('Markdown', () => {

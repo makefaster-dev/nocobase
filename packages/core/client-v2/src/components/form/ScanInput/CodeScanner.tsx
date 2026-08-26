@@ -10,13 +10,12 @@
 import { FileImageOutlined, LeftOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { Button, message, theme } from 'antd';
-import { Html5Qrcode } from 'html5-qrcode';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ScanBox } from './ScanBox';
 import type { CodeFormatsToSupport } from './types';
-import { getCodeScanBoxSize, useCodeScanner } from './useCodeScanner';
+import { getCodeScanBoxSize, loadHtml5Qrcode, useCodeScanner } from './useCodeScanner';
 
 type CodeScannerProps = {
   visible: boolean;
@@ -101,7 +100,8 @@ function CodeScannerContent({ visible, formatsToSupport, onClose, onScanSuccess 
     }
 
     let canceled = false;
-    Html5Qrcode.getCameras()
+    loadHtml5Qrcode()
+      .then(({ Html5Qrcode }) => Html5Qrcode.getCameras())
       .then((cameras) => {
         if (canceled) {
           return;

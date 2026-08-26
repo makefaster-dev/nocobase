@@ -11,8 +11,8 @@ import { Popover, QRCode } from 'antd';
 import { css } from '@emotion/css';
 import { createRoot } from 'react-dom/client';
 import React, { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
-import Vditor from 'vditor';
 import { removeMarkdownIframes, stripMarkdownIframes } from '../../../utils/markdownSanitize';
+import { loadVditor } from './loadVditor';
 import { useCDN } from './useCDN';
 import useStyle from './style';
 
@@ -49,14 +49,17 @@ function DisplayInner(props: { value: string; style?: CSSProperties; loadImages?
   const cdn = useCDN();
   useEffect(() => {
     if (props.loadImages) {
-      Vditor.preview(containerRef.current, props.value ?? '', {
-        mode: 'light',
-        cdn,
-        markdown: {
-          sanitize: true,
-        },
-        transform: stripMarkdownIframes,
-      })
+      loadVditor()
+        .then((Vditor) =>
+          Vditor.preview(containerRef.current, props.value ?? '', {
+            mode: 'light',
+            cdn,
+            markdown: {
+              sanitize: true,
+            },
+            transform: stripMarkdownIframes,
+          }),
+        )
         .then(() => removeMarkdownIframes(containerRef.current))
         .catch(() => removeMarkdownIframes(containerRef.current));
       setTimeout(() => {
@@ -134,13 +137,16 @@ export const Display = (props) => {
   useEffect(() => {
     if (!props.value) return;
     if (textOnly) {
-      Vditor.md2html(props.value, {
-        mode: 'light',
-        cdn,
-        markdown: {
-          sanitize: true,
-        },
-      })
+      loadVditor()
+        .then((Vditor) =>
+          Vditor.md2html(props.value, {
+            mode: 'light',
+            cdn,
+            markdown: {
+              sanitize: true,
+            },
+          }),
+        )
         .then((html) => {
           setText(convertToText(stripMarkdownIframes(html)));
         })

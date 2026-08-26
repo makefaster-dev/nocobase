@@ -10,19 +10,21 @@
 /* istanbul ignore file -- @preserve */
 // 因为这里有 commonjs，在 vitest 下会报错，所以忽略这个文件
 
-import MarkdownIt from 'markdown-it';
-import Mermaid from 'mermaid';
+import type MarkdownIt from 'markdown-it';
+import type MermaidType from 'mermaid';
 
 /**
  * from https://github.com/agoose77/markdown-it-mermaid
  */
 
-// Define interface to await readiness of import
-export default function mermaidPlugin(md: MarkdownIt, options: any) {
+// The mermaid instance is injected by the caller (which imports it lazily) so this module stays free of
+// static imports of the heavy library.
+export default function mermaidPlugin(md: MarkdownIt, options: { mermaid: typeof MermaidType } & Record<string, any>) {
+  const { mermaid: Mermaid, ...restOptions } = options;
   // Setup Mermaid
   Mermaid.initialize({
     securityLevel: 'loose',
-    ...options,
+    ...restOptions,
   });
 
   function getLangName(info: string): string {

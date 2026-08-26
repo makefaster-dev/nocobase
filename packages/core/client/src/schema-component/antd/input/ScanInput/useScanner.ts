@@ -6,9 +6,14 @@
  * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import type { Html5Qrcode } from 'html5-qrcode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+// html5-qrcode is a heavy bundle that is only needed once a scanner actually opens, so it is imported
+// on demand instead of being part of the boot-critical chunk group.
+let html5QrcodePromise: Promise<typeof import('html5-qrcode')> | undefined;
+export const loadHtml5Qrcode = () => (html5QrcodePromise ??= import('html5-qrcode'));
 
 export function useScanner({ onScannerSizeChanged, elementId, onScanSuccess }) {
   const [scanner, setScanner] = useState<Html5Qrcode>();
@@ -43,6 +48,7 @@ export function useScanner({ onScannerSizeChanged, elementId, onScanSuccess }) {
     [onScannerSizeChanged, viewPoint, onScanSuccess],
   );
   const stopScanner = useCallback(async (scanner: Html5Qrcode) => {
+    const { Html5QrcodeScannerState } = await loadHtml5Qrcode();
     const state = scanner.getState();
     if ([Html5QrcodeScannerState.SCANNING, Html5QrcodeScannerState.PAUSED].includes(state)) {
       return scanner.stop();
@@ -68,12 +74,22 @@ export function useScanner({ onScannerSizeChanged, elementId, onScanSuccess }) {
     if (!el) return; // 容器还没挂载，跳过
     if (scanner) return; // 避免重复初始化
 
-    const instance = new Html5Qrcode(elementId);
-    setScanner(instance);
-    startScanCamera(instance);
+    let disposed = false;
+    let instance: Html5Qrcode | undefined;
+    const setupScanner = async () => {
+      const { Html5Qrcode } = await loadHtml5Qrcode();
+      if (disposed) return;
+      instance = new Html5Qrcode(elementId);
+      setScanner(instance);
+      startScanCamera(instance);
+    };
+    setupScanner().catch(console.error);
 
     return () => {
-      stopScanner(instance);
+      disposed = true;
+      if (instance) {
+        stopScanner(instance);
+      }
     };
   }, [elementId]);
 

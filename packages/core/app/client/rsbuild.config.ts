@@ -287,8 +287,18 @@ export default defineConfig(({ command }) => {
       progressBar: true,
     },
     tools: {
-      rspack(config) {
+      rspack(config, { rspack }) {
         config.target = ['web', 'es2020'];
+        // moment is only bundled for a legacy filter-parsing compatibility path that does no
+        // locale-aware formatting, so its ~230KB of locale files are dead weight on the boot path.
+        // Consumers that need a moment locale must import it explicitly.
+        config.plugins = config.plugins || [];
+        config.plugins.push(
+          new rspack.IgnorePlugin({
+            resourceRegExp: /^\.\/locale$/,
+            contextRegExp: /[\\/]moment$/,
+          }),
+        );
         config.optimization = {
           ...config.optimization,
           runtimeChunk: 'single',

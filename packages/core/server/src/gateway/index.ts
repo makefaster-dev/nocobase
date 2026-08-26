@@ -30,6 +30,7 @@ import { getPackageDirByExposeUrl, getPackageNameByExposeUrl } from '../plugin-m
 import { applyErrorWithArgs, getErrorWithCode } from './errors';
 import { IPCSocketClient } from './ipc-socket-client';
 import { IPCSocketServer } from './ipc-socket-server';
+import { servePrecompressedAsset } from './precompressed';
 import { getStorageUploadSecurityHeaders } from './static-file-security';
 import {
   injectRuntimeScript,
@@ -510,12 +511,15 @@ export class Gateway extends EventEmitter {
           return;
         }
       }
-      await compress(req, res);
       const packageName = getPackageNameByExposeUrl(pathname);
       // /static/plugins/@nocobase/plugins-acl/README.md => /User/projects/nocobase/plugins/acl
       const publicDir = getPackageDirByExposeUrl(pathname);
       // /static/plugins/@nocobase/plugins-acl/README.md => README.md
       const destination = pathname.replace(PLUGIN_STATICS_PATH, '').replace(packageName, '');
+      if (servePrecompressedAsset(req, res, publicDir, destination)) {
+        return;
+      }
+      await compress(req, res);
       return handler(req, res, {
         public: publicDir,
         rewrites: [
@@ -556,6 +560,9 @@ export class Gateway extends EventEmitter {
         if (modernPrefix !== MODERN_CLIENT_DIST_DIR && req.url.startsWith(`/${modernPrefix}/`)) {
           req.url = `/${MODERN_CLIENT_DIST_DIR}/${req.url.slice(modernPrefix.length + 2)}`;
         }
+        if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
+          return;
+        }
         await compress(req, res);
         return handler(req, res, {
           public: `${process.env.APP_PACKAGE_ROOT}/dist/client`,
@@ -569,6 +576,9 @@ export class Gateway extends EventEmitter {
         }
       }
       req.url = req.url.substring(APP_PUBLIC_PATH.length - 1);
+      if (servePrecompressedAsset(req, res, `${process.env.APP_PACKAGE_ROOT}/dist/client`)) {
+        return;
+      }
       await compress(req, res);
       return handler(req, res, {
         public: `${process.env.APP_PACKAGE_ROOT}/dist/client`,

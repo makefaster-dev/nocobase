@@ -15,6 +15,7 @@ import { buildClient } from './buildClient';
 import { buildDeclaration } from './buildDeclaration';
 import { buildEsm } from './buildEsm';
 import { buildPlugin } from './buildPlugin';
+import { precompressDirectory } from './precompress';
 import {
   CORE_APP,
   CORE_CLIENT,
@@ -158,6 +159,9 @@ export async function build(pkgs: string[]) {
             ANALYZE: process.env.BUILD_ANALYZE === 'true' ? '1' : undefined,
           },
         );
+      });
+      await runProfiledStage(profile, 'app client precompress', async () => {
+        await precompressDirectory(path.join(CORE_APP, 'dist', 'client'));
       });
     }
     writeToCache(BUILD_ERROR, {});

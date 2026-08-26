@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -144,16 +145,25 @@ export default defineConfig(({ command }) => {
       template: path.resolve(__dirname, 'index.html'),
       scriptLoading: isBuild ? 'module' : 'defer',
       tags: [
-        {
-          tag: 'link',
-          attrs: {
-            rel: 'stylesheet',
-            href: `${htmlPublicPath}global.css`,
-          },
-          publicPath: false,
-          head: true,
-          append: false,
-        },
+        // In production the shared global stylesheet is inlined into the document so first paint does
+        // not wait on an extra render-blocking request; in dev it stays a link for live reloads.
+        isBuild
+          ? {
+              tag: 'style',
+              children: fs.readFileSync(path.resolve(__dirname, 'public', 'global.css'), 'utf-8'),
+              head: true,
+              append: false,
+            }
+          : {
+              tag: 'link',
+              attrs: {
+                rel: 'stylesheet',
+                href: `${htmlPublicPath}global.css`,
+              },
+              publicPath: false,
+              head: true,
+              append: false,
+            },
         {
           tag: 'script',
           children: createRuntimeHeadScript(appPublicPath, isBuild),
@@ -175,6 +185,9 @@ export default defineConfig(({ command }) => {
       target: 'web',
       overrideBrowserslist: ['chrome >= 87', 'edge >= 88', 'firefox >= 78', 'safari >= 14'],
       polyfill: 'usage',
+      // The initial stylesheets are small; inlining them removes several render-blocking requests in
+      // front of first paint.
+      inlineStyles: isBuild,
       distPath: {
         root: path.resolve(__dirname, '../dist/client'),
         js: 'assets',
